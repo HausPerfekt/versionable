@@ -175,7 +175,16 @@ trait VersionableTrait
             $version->versionable_id   = $this->getKey();
             $version->versionable_type = get_class($this);
             $version->user_id          = $this->getAuthUserId();
-            $version->model_data       = serialize($this->attributesToArray());
+            $model_data                = $this->attributesToArray();
+            if(count($this->dontVersionFields) > 0) {
+                foreach($this->dontVersionFields as $field) {
+                    if(!isset($model_data[$field])) {
+                        continue;
+                    }
+                    unset($model_data[$field]);
+                }
+            }
+            $version->model_data       = serialize($model_data);
 
             if (!empty( $this->reason )) {
                 $version->reason = $this->reason;
