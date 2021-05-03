@@ -87,7 +87,15 @@ class Version extends Eloquent
     public function diff(Version $againstVersion = null)
     {
         $model = $this->getModel();
-        $diff  = $againstVersion ? $againstVersion->getModel() : $this->versionable()->withTrashed()->first()->currentVersion()->getModel();
+        if($againstVersion) {
+            $diff = $againstVersion->getModel();
+        } else {
+            $model = $this->versionable()->withTrashed()->first()->currentVersion();
+            if(is_null($model)) {
+                return [];
+            }
+            $diff = $model->getModel();
+        }
 
         $diffArray = array_diff_assoc($diff->getAttributes(), $model->getAttributes());
 
