@@ -173,6 +173,7 @@ trait VersionableTrait
             $version->versionable_id   = $this->getKey();
             $version->versionable_type = method_exists($this, 'getMorphClass') ? $this->getMorphClass() : get_class($this);
             $version->user_id          = $this->getAuthUserId();
+            $model_data                = $this->attributesToArray();
             $versionedHiddenFields = $this->versionedHiddenFields ?? [];
             $this->makeVisible($versionedHiddenFields);
             $this->makeHidden($versionedHiddenFields);
@@ -190,8 +191,13 @@ trait VersionableTrait
                 $version->reason = $this->reason;
             }
 
-            $version->save();
+            $save_version = $this->updating && !is_null($version) ? count($version->diff()) > 0 : true;
 
+            if(!$save_version) {
+                return;
+            }
+
+            $version->save();
             $this->purgeOldVersions();
         }
     }
