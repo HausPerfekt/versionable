@@ -139,6 +139,16 @@ trait VersionableTrait
     }
 
     /**
+     * Returns the previous versions
+     * @return Collection
+     */
+    public function previousVersions($skip = 1, $take = PHP_INT_MAX) : Collection
+    {
+        $class = $this->getVersionClass();
+        return $this->versions()->latest()->skip($skip)->take($take)->get();
+    }
+
+    /**
      * Get a model based on the version id
      *
      * @param $version_id
@@ -209,25 +219,14 @@ trait VersionableTrait
             $model_data                = $this->attributesToArray();
 
 
-            $versionedHiddenFields = $this->versionedHiddenFields ?? [];
-            $this->makeVisible($versionedHiddenFields);
-            $this->makeHidden($versionedHiddenFields);
-            if(count($this->dontVersionFields) > 0) {
-                foreach($this->dontVersionFields as $field) {
-                    if(!isset($model_data[$field])) {
-                        continue;
-                    }
-                    unset($model_data[$field]);
-                }
-            }
             $version->model_data       = serialize($model_data);
 
             if (!empty( $this->reason )) {
                 $version->reason = $this->reason;
             }
-            
+
             $save_version = !($this->updating && !is_null($version)) || count($version->diff()) > 0;
-    
+
             if(!$save_version) {
                 return;
             }
