@@ -1,8 +1,11 @@
 <?php
 namespace Mpociot\Versionable;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Mockery\Exception;
+use ReflectionClass;
 
 /**
  * Class VersionableTrait
@@ -126,6 +129,16 @@ trait VersionableTrait
     }
 
     /**
+     * Returns the previous versions
+     * @return Collection
+     */
+    public function previousVersions($skip = 1, $take = PHP_INT_MAX) : Collection
+    {
+        $class = $this->getVersionClass();
+        return $this->versions()->latest()->skip($skip)->take($take)->get();
+    }
+
+    /**
      * Get a model based on the version id
      *
      * @param $version_id
@@ -167,13 +180,35 @@ trait VersionableTrait
             ( $this->versioningEnabled === true && $this->updating && $this->isValidForVersioning() ) ||
             ( $this->versioningEnabled === true && !$this->updating && !is_null($this->versionableDirtyData) && count($this->versionableDirtyData))
         ) {
+            /*$reflector = new ReflectionClass($this);
+            $relations = [];
+            foreach ($reflector->getMethods() as $reflectionMethod) {
+                $returnType = $reflectionMethod->getReturnType();
+                if ($returnType) {
+                    if (in_array(class_basename($returnType->getName()), ['HasOne', 'HasMany', 'BelongsTo', 'BelongsToMany', 'MorphToMany', 'MorphTo'])) {
+                        if($this->relationLoaded($reflectionMethod->name) ||
+                            $this->firstUC($reflectionMethod->name) ||
+                            str_contains($reflectionMethod->name, 'history')) {
+                            continue;
+                        }
+                        $relations[] = $reflectionMethod->name;
+                    }
+                }
+            }*/
             // Save a new version
             $class                     = $this->getVersionClass();
             $version                   = new $class();
             $version->versionable_id   = $this->getKey();
             $version->versionable_type = method_exists($this, 'getMorphClass') ? $this->getMorphClass() : get_class($this);
             $version->user_id          = $this->getAuthUserId();
+            /*if(count($relations) > 0) {
+                $model_data                = collect($this->loadMissing($relations))->toJson();
+            } else {
+                $model_data                = collect($this)->toJson();
+            }*/
             $model_data                = $this->attributesToArray();
+
+
             $versionedHiddenFields = $this->versionedHiddenFields ?? [];
             $this->makeVisible($versionedHiddenFields);
             $this->makeHidden($versionedHiddenFields);
@@ -190,9 +225,9 @@ trait VersionableTrait
             if (!empty( $this->reason )) {
                 $version->reason = $this->reason;
             }
-
-            $save_version = $this->updating && !is_null($version) ? count($version->diff()) > 0 : true;
-
+            
+            $save_version = !($this->updating && !is_null($version)) || count($version->diff()) > 0;
+    
             if(!$save_version) {
                 return;
             }
@@ -241,6 +276,11 @@ trait VersionableTrait
         }
 
         return ( count(array_diff_key($this->versionableDirtyData, array_flip($removeableKeys))) > 0 );
+    }
+
+    private function firstUC ( $subject ) {
+        $n = preg_match( '/[A-Z]/', $subject, $matches, PREG_OFFSET_CAPTURE );
+        return $n ? $matches[0] : false;
     }
 
     /**
