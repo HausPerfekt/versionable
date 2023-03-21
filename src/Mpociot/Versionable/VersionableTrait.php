@@ -116,8 +116,7 @@ trait VersionableTrait
      */
     public function currentVersion()
     {
-        $class = $this->getVersionClass();
-        return $this->versions()->orderBy( $class::CREATED_AT, 'DESC')->first();
+        return $this->getLatestVersions()->first();
     }
 
     /**
@@ -126,8 +125,17 @@ trait VersionableTrait
      */
     public function previousVersion()
     {
+        return $this->getLatestVersions()->limit(1)->offset(1)->first();
+    }
+
+    /**
+     * Returns the previous versions
+     * @return Collection
+     */
+    public function previousVersions($skip = 1, $take = PHP_INT_MAX) : Collection
+    {
         $class = $this->getVersionClass();
-        return $this->versions()->latest()->limit(1)->offset(1)->first();
+        return $this->versions()->latest()->skip($skip)->take($take)->get();
     }
 
     /**
@@ -201,7 +209,7 @@ trait VersionableTrait
             $class                     = $this->getVersionClass();
             $version                   = new $class();
             $version->versionable_id   = $this->getKey();
-            $version->versionable_type = get_class($this);
+            $version->versionable_type = method_exists($this, 'getMorphClass') ? $this->getMorphClass() : get_class($this);
             $version->user_id          = $this->getAuthUserId();
             /*if(count($relations) > 0) {
                 $model_data                = collect($this->loadMissing($relations))->toJson();
@@ -216,20 +224,20 @@ trait VersionableTrait
             if (!empty( $this->reason )) {
                 $version->reason = $this->reason;
             }
-            
+
             $save_version = !($this->updating && !is_null($version)) || count($version->diff()) > 0;
-    
+
             if(!$save_version) {
                 return;
             }
-    
+
             $version->save();
             $this->purgeOldVersions();
         }
     }
 
     /**
-     * Delete old versions of this model when the reach a specific count.
+     * Delete old versions of this model when they reach a specific count.
      * 
      * @return void
      */
@@ -241,8 +249,7 @@ trait VersionableTrait
             $count = $this->versions()->count();
             
             if ($count > $keep) {
-                $oldVersions = $this->versions()
-                    ->latest()
+                $this->getLatestVersions()
                     ->take($count)
                     ->skip($keep)
                     ->get()
@@ -280,10 +287,15 @@ trait VersionableTrait
      */
     protected function getAuthUserId()
     {
-        if (Auth::check()) {
-            return Auth::id();
-        }
-        return null;
+        return Auth::check() ? Auth::id() : null;
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    protected function getLatestVersions()
+    {
+        return $this->versions()->orderByDesc('version_id');
     }
 
 

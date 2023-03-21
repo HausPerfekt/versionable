@@ -1,12 +1,13 @@
 <?php
 
+use Mockery as m;
 use Carbon\Carbon;
+use Mpociot\Versionable\Version;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Config;
-use Mockery as m;
 use Illuminate\Database\Eloquent\Model;
-use Mpociot\Versionable\Version;
 use Mpociot\Versionable\VersionableTrait;
+use Illuminate\Database\Eloquent\Relations\Relation;
 
 class VersionableTest extends VersionableTestCase
 {
@@ -63,8 +64,6 @@ class VersionableTest extends VersionableTestCase
         $user->password = "12345";
         $user->last_login = $user->freshTimestamp();
         $user->save();
-        // Needed because otherwise timestamps are exactly the same
-        sleep(1);
 
         $user->name = "John";
         $user->save();
@@ -121,9 +120,6 @@ class VersionableTest extends VersionableTestCase
         $responsibleOrigUser->save();
 
         auth()->login($responsibleOrigUser);
-
-        // Needed because otherwise timestamps are exactly the same
-        sleep(1);
 
         $user = new TestVersionableUser();
         $user->name = "John";
@@ -341,7 +337,6 @@ class VersionableTest extends VersionableTestCase
         $user->password = "12345";
         $user->last_login = $user->freshTimestamp();
         $user->save();
-        sleep(1);
 
         $user->name = "John";
         $user->save();
@@ -361,7 +356,6 @@ class VersionableTest extends VersionableTestCase
         $user->password = "12345";
         $user->last_login = $user->freshTimestamp();
         $user->save();
-        sleep(1);
 
         $user->name = "John";
         $user->created_at = Carbon::now();
@@ -385,12 +379,10 @@ class VersionableTest extends VersionableTestCase
         $user->password = "12345";
         $user->last_login = $user->freshTimestamp();
         $user->save();
-        sleep(1);
 
         $user->name = "John";
         $user->email = "john@snow.com";
         $user->save();
-        sleep(1);
 
         $user->name = "Julia";
         $user->save();
@@ -418,8 +410,6 @@ class VersionableTest extends VersionableTestCase
         $model = new ModelWithDynamicVersion();
         $model->name = $name_v1 ;
         $model->save();
-
-        sleep(1);
 
         $model->name = $name_v2 ;
         $model->save();
@@ -455,8 +445,6 @@ class VersionableTest extends VersionableTestCase
         $model->password = $name_v1 ;
         $model->save();
 
-        sleep(1);
-
         $model->name = $name_v2 ;
         $model->save();
 
@@ -480,18 +468,12 @@ class VersionableTest extends VersionableTestCase
         $model->name = $name_v1 ;
         $model->save();
         
-        sleep(1);
-
         $model->name = $name_v2 ;
         $model->save();
         
-        sleep(1);
-
         $model->name = $name_v3 ;
         $model->save();
         
-        sleep(1);
-
         $model->name = $name_v4 ;
         $model->save();
 
@@ -506,6 +488,46 @@ class VersionableTest extends VersionableTestCase
         $model = $model->previousVersion()->revert();
 
         $this->assertEquals( $name_v3, $model->name );
+    }
+
+    public function testAllowHiddenFields() {
+        $user = new TestHiddenFieldsUser();
+        $user->name = "Marcel";
+        $user->email = "m.pociot@test.php";
+        $user->password = "12345";
+        $user->save();
+        sleep(1);
+
+        $user->name = "John";
+        $user->email = "j.barlow@test.php";
+        $user->password = "6789";
+        $user->save();
+        sleep(1);
+
+        $diff = $user->previousVersion()->diff();
+
+        $this->assertArrayHasKey('email', $diff);
+        $this->assertArrayHasKey('password', $diff);
+        $this->assertEquals( 'John', $diff['name'] );
+        $this->assertEquals( 'j.barlow@test.php', $diff['email'] );
+        $this->assertEquals( '6789', $diff['password'] );
+
+        $this->assertArrayNotHasKey('password', $user->toArray());
+    }
+
+    public function testWhereModelHasMorphMap()
+    {
+        Relation::morphMap(['users' => TestVersionableUser::class]);
+        $user = new TestVersionableUser();
+        $user->name = "Test";
+        $user->email = "example@test.php";
+        $user->password = "12345";
+        $user->last_login = $user->freshTimestamp();
+        $user->save();
+
+        $version = $user->currentVersion();
+        $this->assertEquals( $user->attributesToArray(), $version->getModel()->attributesToArray() );
+        Relation::morphMap([], false);
     }
  
 }
@@ -564,3 +586,12 @@ class ModelWithJsonField extends Model
     protected $casts = ['json_field' => 'array'];
 }
 
+class TestHiddenFieldsUser extends \Illuminate\Foundation\Auth\User {
+    use \Mpociot\Versionable\VersionableTrait;
+
+    protected $table = "users";
+
+    protected $hidden = ['email', 'password'];
+
+    protected $versionedHiddenFields = ['email', 'password'];
+}
