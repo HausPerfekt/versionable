@@ -139,16 +139,6 @@ trait VersionableTrait
     }
 
     /**
-     * Returns the previous versions
-     * @return Collection
-     */
-    public function previousVersions($skip = 1, $take = PHP_INT_MAX) : Collection
-    {
-        $class = $this->getVersionClass();
-        return $this->versions()->latest()->skip($skip)->take($take)->get();
-    }
-
-    /**
      * Get a model based on the version id
      *
      * @param $version_id
